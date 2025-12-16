@@ -2,16 +2,21 @@ package main
 
 import (
 	"os"
+	"os/exec"
+	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
 
 type model struct {
 	input string
+	output []string
 }
 
 func initialModel() model {
-	return model{}
+	return model{
+		output: []string{},
+	}
 }
 
 func (m model) Init() tea.Cmd {
@@ -28,8 +33,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 
 		case "enter":
-			m.input = ""
-			return m, nil
+			command := m.input
+	m.output = append(m.output, "aero > "+command)
+	m.input = ""
+
+	return runCommand(m, command)
 
 		default:
 			m.input += msg.String()
@@ -40,7 +48,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) View() string {
-	return "\n  aero › " + m.input
+	view := "\n"
+
+	for _, line := range m.output {
+		view += "  " + line + "\n"
+	}
+
+	view += "\n  aero > " + m.input
+	return view
 }
 
 func main() {
@@ -48,4 +63,43 @@ func main() {
 	if err := p.Start(); err != nil {
 		os.Exit(1)
 	}
+}
+
+func runCommand(m model, input string) (tea.Model, tea.Cmd) {
+	switch input {
+
+	case "exit":
+		return m, tea.Quit
+
+	case "help":
+		m.output = append(m.output,
+			"Available commands:",
+			"  help   - show this message",
+			"  exit   - leave Aero",
+		)
+		return m, nil
+
+	default:
+		return runSystemCommand(m, input)
+	}
+}
+
+func runSystemCommand(m model, input string) (tea.Model, tea.Cmd) {
+	parts := strings.Fields(input)
+	if len(parts) == 0 {
+		return m, nil
+	}
+
+	cmd := exec.Command(parts[0], parts[1:]...)
+	output, err := cmd.CombinedOutput()
+
+	if err != nil {
+		m.output = append(m.output, err.Error())
+	}
+
+	if len(output) > 0 {
+		m.output = append(m.output, string(output))
+	}
+
+	return m, nil
 }
