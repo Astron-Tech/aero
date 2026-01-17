@@ -40,7 +40,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return runCommand(m, command)
 
 		default:
-			m.input += msg.String()
+			if len(msg.String()) == 1 {
+		m.input += msg.String()
+	}
 		}
 	}
 
