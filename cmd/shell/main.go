@@ -39,6 +39,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	return runCommand(m, command)
 
+	case "backspace":
+	if len(m.input) > 0 {
+		m.input = m.input[:len(m.input)-1]
+	}
+
 		default:
 			if len(msg.String()) == 1 {
 		m.input += msg.String()
