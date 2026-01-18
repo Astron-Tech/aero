@@ -9,13 +9,17 @@ import (
 )
 
 type model struct {
-	input string
-	output []string
+	input        string
+	output       []string
+	history      []string
+	historyIndex int
 }
 
 func initialModel() model {
 	return model{
-		output: []string{},
+		output:       []string{},
+		history:      []string{},
+		historyIndex: 0,
 	}
 }
 
@@ -34,20 +38,40 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "enter":
 			command := m.input
-	m.output = append(m.output, "aero > "+command)
-	m.input = ""
+			m.output = append(m.output, "aero > "+command)
 
-	return runCommand(m, command)
+			if command != "" {
+				m.history = append(m.history, command)
+				m.historyIndex = len(m.history)
+			}
 
-	case "backspace":
-	if len(m.input) > 0 {
-		m.input = m.input[:len(m.input)-1]
-	}
+			m.input = ""
+			return runCommand(m, command)
+
+		case "backspace":
+			if len(m.input) > 0 {
+				m.input = m.input[:len(m.input)-1]
+			}
+
+		case "up":
+			if m.historyIndex > 0 {
+				m.historyIndex--
+				m.input = m.history[m.historyIndex]
+			}
+
+		case "down":
+			if m.historyIndex < len(m.history)-1 {
+				m.historyIndex++
+				m.input = m.history[m.historyIndex]
+			} else {
+				m.historyIndex = len(m.history)
+				m.input = ""
+			}
 
 		default:
 			if len(msg.String()) == 1 {
-		m.input += msg.String()
-	}
+				m.input += msg.String()
+			}
 		}
 	}
 
