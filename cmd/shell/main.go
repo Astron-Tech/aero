@@ -12,12 +12,9 @@ import (
 // ----- THEME -----
 
 var (
-	promptStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("63")).
-		Bold(true)
-
-	outputStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("245"))
+	promptStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("63")).Bold(true)
+	outputStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
+	statusStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("241")).Italic(true)
 )
 
 // ----- MODEL -----
@@ -27,6 +24,7 @@ type model struct {
 	output       []string
 	history      []string
 	historyIndex int
+	theme        string
 }
 
 func initialModel() model {
@@ -34,6 +32,7 @@ func initialModel() model {
 		output:       []string{},
 		history:      []string{},
 		historyIndex: 0,
+		theme:        "dark",
 	}
 }
 
@@ -100,10 +99,11 @@ func (m model) View() string {
 	b.WriteString(promptStyle.Render("  aero > "))
 	b.WriteString(m.input)
 
+	b.WriteString("\n")
+	b.WriteString(statusStyle.Render("  theme: " + m.theme + "   ctrl+c to quit"))
+
 	return b.String()
 }
-
-
 
 // ----- MAIN -----
 
@@ -123,9 +123,21 @@ func runCommand(m model, input string) (tea.Model, tea.Cmd) {
 	case "help":
 		m.output = append(m.output,
 			"Available commands:",
-			"  help   - show this message",
-			"  exit   - leave Aero",
+			"  help         - show this message",
+			"  exit         - leave Aero",
+			"  theme dark   - dark theme",
+			"  theme light  - light theme",
 		)
+		return m, nil
+	case "theme dark":
+		m.theme = "dark"
+		promptStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("63")).Bold(true)
+		outputStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
+		return m, nil
+	case "theme light":
+		m.theme = "light"
+		promptStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("25")).Bold(true)
+		outputStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("238"))
 		return m, nil
 	default:
 		return runSystemCommand(m, input)
