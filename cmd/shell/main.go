@@ -19,6 +19,8 @@ var (
 	searchResultStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("250"))
 )
 
+const nl = "\n"
+
 // ----- MODEL -----
 
 type model struct {
@@ -29,6 +31,7 @@ type model struct {
 	theme        string
 	mode         string // shell | search
 	searchQuery  string
+	instruction  string
 	results      []string
 }
 
@@ -53,22 +56,30 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "ctrl+c", "esc":
+		case "esc":
 			if m.mode == "search" {
 				m.mode = "shell"
 				m.searchQuery = ""
+				m.instruction = ""
 				m.results = []string{}
 				return m, nil
 			}
 			return m, tea.Quit
-		case "ctrl+k":
+		case "/":
 			m.mode = "search"
 			m.searchQuery = ""
+			m.instruction = ""
 			m.results = []string{}
 			return m, nil
 		case "enter":
 			if m.mode == "search" {
-				m.results = mockSearch(m.searchQuery)
+				query, instr := parseSearch(m.searchQuery)
+				m.instruction = instr
+				m.output = append(m.output, searchPromptStyle.Render("search > ")+query)
+				for _, line := range mockAISearch(query, instr) {
+					m.output = append(m.output, line)
+				}
+				m.searchQuery = ""
 				return m, nil
 			}
 			command := m.input
@@ -89,21 +100,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if len(m.input) > 0 {
 				m.input = m.input[:len(m.input)-1]
 			}
-		case "up":
-			if m.mode == "shell" && m.historyIndex > 0 {
-				m.historyIndex--
-				m.input = m.history[m.historyIndex]
-			}
-		case "down":
-			if m.mode == "shell" {
-				if m.historyIndex < len(m.history)-1 {
-					m.historyIndex++
-					m.input = m.history[m.historyIndex]
-				} else {
-					m.historyIndex = len(m.history)
-					m.input = ""
-				}
-			}
 		default:
 			if len(msg.String()) == 1 {
 				if m.mode == "search" {
@@ -122,32 +118,32 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m model) View() string {
 	var b strings.Builder
 
-	b.WriteString("\n")
+	b.WriteString(nl)
 
 	if m.mode == "search" {
 		b.WriteString(searchPromptStyle.Render("  search > "))
 		b.WriteString(m.searchQuery)
-		b.WriteString("\n")
+		b.WriteString(nl + nl)
 		for _, r := range m.results {
 			b.WriteString(searchResultStyle.Render("  " + r))
-			b.WriteString("\n")
+			b.WriteString(nl)
 		}
-		b.WriteString("\n")
+		b.WriteString(nl)
 		b.WriteString(statusStyle.Render("  search mode   esc to exit"))
 		return b.String()
 	}
 
 	for _, line := range m.output {
 		b.WriteString(outputStyle.Render("  " + line))
-		b.WriteString("\n")
+		b.WriteString(nl)
 	}
 
-	b.WriteString("\n")
+	b.WriteString(nl)
 	b.WriteString(promptStyle.Render("  aero > "))
 	b.WriteString(m.input)
 
-	b.WriteString("\n")
-	b.WriteString(statusStyle.Render("  theme: " + m.theme + "   ctrl+k search"))
+	b.WriteString(nl)
+	b.WriteString(statusStyle.Render("  theme: " + m.theme + "   / search"))
 
 	return b.String()
 }
@@ -161,6 +157,30 @@ func main() {
 	}
 }
 
+// ----- SEARCH + AI (MOCK) -----
+
+func parseSearch(input string) (query string, instruction string) {
+	parts := strings.SplitN(input, "|", 2)
+	query = strings.TrimSpace(parts[0])
+	if len(parts) == 2 {
+		instruction = strings.TrimSpace(parts[1])
+	} else {
+		instruction = "Summarize the following search results clearly and concisely."
+	}
+	return
+}
+
+func mockAISearch(query, instruction string) []string {
+	if query == "" {
+		return []string{}
+	}
+	return []string{
+		"AI Summary for: " + query,
+		"Instruction: " + instruction,
+		"• This is where Pollinations output will go.",
+	}
+}
+
 // ----- COMMANDS -----
 
 func runCommand(m model, input string) (tea.Model, tea.Cmd) {
@@ -170,35 +190,12 @@ func runCommand(m model, input string) (tea.Model, tea.Cmd) {
 	case "help":
 		m.output = append(m.output,
 			"Available commands:",
-			"  help         - show this message",
-			"  exit         - leave Aero",
-			"  theme dark   - dark theme",
-			"  theme light  - light theme",
+			"  help   - show this message",
+			"  exit   - leave Aero",
 		)
-		return m, nil
-	case "theme dark":
-		m.theme = "dark"
-		promptStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("63")).Bold(true)
-		outputStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
-		return m, nil
-	case "theme light":
-		m.theme = "light"
-		promptStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("25")).Bold(true)
-		outputStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("238"))
 		return m, nil
 	default:
 		return runSystemCommand(m, input)
-	}
-}
-
-func mockSearch(q string) []string {
-	if q == "" {
-		return []string{}
-	}
-	return []string{
-		"Result: " + q + " — overview",
-		"Docs: " + q + " reference",
-		"Guide: using " + q + " effectively",
 	}
 }
 
