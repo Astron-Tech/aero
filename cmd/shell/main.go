@@ -12,9 +12,11 @@ import (
 // ----- THEME -----
 
 var (
-	promptStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("63")).Bold(true)
-	outputStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
-	statusStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("241")).Italic(true)
+	promptStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("63")).Bold(true)
+	outputStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
+	statusStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("241")).Italic(true)
+	searchPromptStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("212")).Bold(true)
+	searchResultStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("250"))
 )
 
 // ----- MODEL -----
@@ -25,6 +27,9 @@ type model struct {
 	history      []string
 	historyIndex int
 	theme        string
+	mode         string // shell | search
+	searchQuery  string
+	results      []string
 }
 
 func initialModel() model {
@@ -33,6 +38,8 @@ func initialModel() model {
 		history:      []string{},
 		historyIndex: 0,
 		theme:        "dark",
+		mode:         "shell",
+		results:      []string{},
 	}
 }
 
@@ -47,8 +54,23 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c", "esc":
+			if m.mode == "search" {
+				m.mode = "shell"
+				m.searchQuery = ""
+				m.results = []string{}
+				return m, nil
+			}
 			return m, tea.Quit
+		case "ctrl+k":
+			m.mode = "search"
+			m.searchQuery = ""
+			m.results = []string{}
+			return m, nil
 		case "enter":
+			if m.mode == "search" {
+				m.results = mockSearch(m.searchQuery)
+				return m, nil
+			}
 			command := m.input
 			m.output = append(m.output, "aero > "+command)
 			if command != "" {
@@ -58,25 +80,37 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.input = ""
 			return runCommand(m, command)
 		case "backspace":
+			if m.mode == "search" {
+				if len(m.searchQuery) > 0 {
+					m.searchQuery = m.searchQuery[:len(m.searchQuery)-1]
+				}
+				return m, nil
+			}
 			if len(m.input) > 0 {
 				m.input = m.input[:len(m.input)-1]
 			}
 		case "up":
-			if m.historyIndex > 0 {
+			if m.mode == "shell" && m.historyIndex > 0 {
 				m.historyIndex--
 				m.input = m.history[m.historyIndex]
 			}
 		case "down":
-			if m.historyIndex < len(m.history)-1 {
-				m.historyIndex++
-				m.input = m.history[m.historyIndex]
-			} else {
-				m.historyIndex = len(m.history)
-				m.input = ""
+			if m.mode == "shell" {
+				if m.historyIndex < len(m.history)-1 {
+					m.historyIndex++
+					m.input = m.history[m.historyIndex]
+				} else {
+					m.historyIndex = len(m.history)
+					m.input = ""
+				}
 			}
 		default:
 			if len(msg.String()) == 1 {
-				m.input += msg.String()
+				if m.mode == "search" {
+					m.searchQuery += msg.String()
+				} else {
+					m.input += msg.String()
+				}
 			}
 		}
 	}
@@ -90,6 +124,19 @@ func (m model) View() string {
 
 	b.WriteString("\n")
 
+	if m.mode == "search" {
+		b.WriteString(searchPromptStyle.Render("  search > "))
+		b.WriteString(m.searchQuery)
+		b.WriteString("\n")
+		for _, r := range m.results {
+			b.WriteString(searchResultStyle.Render("  " + r))
+			b.WriteString("\n")
+		}
+		b.WriteString("\n")
+		b.WriteString(statusStyle.Render("  search mode   esc to exit"))
+		return b.String()
+	}
+
 	for _, line := range m.output {
 		b.WriteString(outputStyle.Render("  " + line))
 		b.WriteString("\n")
@@ -100,7 +147,7 @@ func (m model) View() string {
 	b.WriteString(m.input)
 
 	b.WriteString("\n")
-	b.WriteString(statusStyle.Render("  theme: " + m.theme + "   ctrl+c to quit"))
+	b.WriteString(statusStyle.Render("  theme: " + m.theme + "   ctrl+k search"))
 
 	return b.String()
 }
@@ -141,6 +188,17 @@ func runCommand(m model, input string) (tea.Model, tea.Cmd) {
 		return m, nil
 	default:
 		return runSystemCommand(m, input)
+	}
+}
+
+func mockSearch(q string) []string {
+	if q == "" {
+		return []string{}
+	}
+	return []string{
+		"Result: " + q + " — overview",
+		"Docs: " + q + " reference",
+		"Guide: using " + q + " effectively",
 	}
 }
 
