@@ -1,6 +1,8 @@
 package main
 
 import (
+	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"strings"
@@ -120,25 +122,22 @@ func (m model) View() string {
 
 	b.WriteString(nl)
 
-	if m.mode == "search" {
-		b.WriteString(searchPromptStyle.Render("  search > "))
-		b.WriteString(m.searchQuery)
-		b.WriteString(nl + nl)
-		for _, r := range m.results {
-			b.WriteString(searchResultStyle.Render("  " + r))
-			b.WriteString(nl)
-		}
-		b.WriteString(nl)
-		b.WriteString(statusStyle.Render("  search mode   esc to exit"))
-		return b.String()
-	}
-
+	// Render shared scrollback (shell + search history)
 	for _, line := range m.output {
 		b.WriteString(outputStyle.Render("  " + line))
 		b.WriteString(nl)
 	}
 
 	b.WriteString(nl)
+
+	if m.mode == "search" {
+		b.WriteString(searchPromptStyle.Render("  search > "))
+		b.WriteString(m.searchQuery)
+		b.WriteString(nl)
+		b.WriteString(statusStyle.Render("  search mode   esc to exit"))
+		return b.String()
+	}
+
 	b.WriteString(promptStyle.Render("  aero > "))
 	b.WriteString(m.input)
 
@@ -173,6 +172,36 @@ func parseSearch(input string) (query string, instruction string) {
 func mockAISearch(query, instruction string) []string {
 	if query == "" {
 		return []string{}
+	}
+
+	prompt := instruction + "
+
+" + query
+	url := "https://text.pollinations.ai/" + strings.ReplaceAll(prompt, " ", "%20")
+
+	resp, err := http.Get(url)
+	if err != nil {
+		return []string{"AI error: " + err.Error()}
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return []string{"AI error: " + err.Error()}
+	}
+
+	lines := strings.Split(string(body), "
+")
+	results := []string{"AI Summary for: " + query}
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			results = append(results, line)
+		}
+	}
+
+	return results
+}
 	}
 	return []string{
 		"AI Summary for: " + query,
