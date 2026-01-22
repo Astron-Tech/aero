@@ -18,7 +18,6 @@ var (
 	outputStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
 	statusStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("241")).Italic(true)
 	searchPromptStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("212")).Bold(true)
-	searchResultStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("250"))
 )
 
 const nl = "\n"
@@ -174,9 +173,7 @@ func mockAISearch(query, instruction string) []string {
 		return []string{}
 	}
 
-	prompt := instruction + "
-
-" + query
+	prompt := instruction + "\n" + query
 	url := "https://text.pollinations.ai/" + strings.ReplaceAll(prompt, " ", "%20")
 
 	resp, err := http.Get(url)
@@ -190,8 +187,7 @@ func mockAISearch(query, instruction string) []string {
 		return []string{"AI error: " + err.Error()}
 	}
 
-	lines := strings.Split(string(body), "
-")
+	lines := strings.Split(string(body), "\n")
 	results := []string{"AI Summary for: " + query}
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
@@ -201,13 +197,6 @@ func mockAISearch(query, instruction string) []string {
 	}
 
 	return results
-}
-	}
-	return []string{
-		"AI Summary for: " + query,
-		"Instruction: " + instruction,
-		"• This is where Pollinations output will go.",
-	}
 }
 
 // ----- COMMANDS -----
